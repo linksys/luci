@@ -2,7 +2,23 @@ name: AI Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      code_review:
+        description: 'Run code review'
+        required: false
+        default: true
+        type: boolean
+      upstream_check:
+        description: 'Check upstream references'
+        required: false
+        default: true
+        type: boolean
+      pr_number:
+        description: 'PR number to review (leave empty for current branch)'
+        required: false
+        type: string
 
 permissions:
   pull-requests: write
@@ -10,56 +26,29 @@ permissions:
 
 jobs:
   ai-review:
+    if: contains(github.event.pull_request.labels.*.name, 'ai-code-review') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout luci repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Checkout ci-templates
+        uses: actions/checkout@v4
         with:
-          python-version: "3.12"
-
-      - name: Cache pip packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies
-        run: pip install -r scripts/ai-review/requirements.txt
-
-      - name: Get PR diff
-        run: |
-          git diff origin/${{ github.event.pull_request.base.ref }}...HEAD > /tmp/pr_diff.txt
+          repository: linksys/ci-templates
+          token: ${{ secrets.CI_TEMPLATES_TOKEN }}
+          path: .ci-templates
+          ref: main
 
       - name: Run AI Code Review
-        env:
-          AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
-          AWS_REGION: us-east-2
-        run: python scripts/ai-review/review.py /tmp/pr_diff.txt > /tmp/review_result.txt 2>&1
-
-      - name: Post review comment
-        uses: actions/github-script@v7
+        uses: ./.ci-templates/.github/actions/ai-review
         with:
-          script: |
-            const fs = require('fs');
-            const review = fs.readFileSync('/tmp/review_result.txt', 'utf8');
-            if (!review.trim()) {
-              console.log('No review comments generated.');
-              return;
-            }
-            try {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: `## AI Code Review\n\n${review}`
-              });
-            } catch (error) {
-              console.error('Failed to post comment:', error);
-              core.setFailed(`Failed to post review comment: ${error.message}`);
-            }
+          token: ${{ secrets.CI_TEMPLATES_TOKEN }}
+          aws_token: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
+          pr_number: ${{ github.event.inputs.pr_number }}
+          code_review: ${{ github.event.inputs.code_review || 'true' }}
+          upstream_check: ${{ github.event.inputs.upstream_check || 'true' }}
+          aws_region: us-east-2
+          ref: main
