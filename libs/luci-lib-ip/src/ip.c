@@ -180,7 +180,7 @@ static bool parse_cidr(const char *dest, cidr_t *pp)
 {
 	char *p, *s, buf[INET6_ADDRSTRLEN * 2 + 2];
 
-	strncpy(buf, dest, sizeof(buf) - 1);
+	snprintf(buf, sizeof(buf), "%s", dest);
 
 	p = strchr(buf, '/');
 
