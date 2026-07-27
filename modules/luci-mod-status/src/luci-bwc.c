@@ -550,7 +550,7 @@ static int run_daemon(void)
 				|| (strstr(line, "src=::1 ") && strstr(line, "dst=::1 ")))
 					continue;
 
-				if (sscanf(line, "%*s %*d %s", buf) || sscanf(line, "%s %*d", buf))
+				if (sscanf(line, "%*s %*d %31s", buf) || sscanf(line, "%31s %*d", buf))
 				{
 					if (!strcmp(buf, "tcp"))
 						tcp++;
